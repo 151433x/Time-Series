@@ -1,0 +1,692 @@
+---
+title: "covid project 11/16/21 TS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#prework
+rm(list=ls())
+gc()
+cat('\f')
+library('fpp2')
+library('dplyr')
+library('janitor')
+```
+prework and load the packagge of fpp2
+
+
+```{r}
+setwd('C:/Users/nkheth1/Desktop/Time Series and Forecasting/Final Project')
+
+#daily.covid.worldwide=read.csv('covid_19_data.csv') 
+global.cases <- read.csv('time_series_covid_19_confirmed.csv')
+
+#us.cases=read.csv('time_series_covid_19_confirmed_US.csv')
+global.deaths <- read.csv('time_series_covid_19_deaths.csv')
+
+#us.deaths=read.csv('time_series_covid_19_deaths_US.csv')  
+global.recovered <- read.csv('time_series_covid_19_recovered.csv')
+```
+load the data under different names
+
+Data Cleaning
+```{r, echo=FALSE}
+#df.list <- list(daily.covid.worldwide,global.cases,us.cases,global.deaths,us.deaths,global.recovered)
+#lapply(df.list,anyNA
+#daily.covid.worldwid=daily.covid.worldwide$SNo=NULL # just an ID variable, not useful for us
+
+#confirmed cases data cleaning
+global.cases <- global.cases[,-c(1,3,4)] #removing columns for region, latitude, and longitude
+global.cases <- global.cases %>%  #sum different regional data under single country data
+  group_by(Country.Region) %>% 
+  summarise_all(sum)
+global.cases.m <- as.matrix(global.cases)
+global.cases.m.t <- t(global.cases.m) #convert data frame into matrix and transpose into columns
+global.cases=as.data.frame(global.cases.m.t) #convert back into data frame
+global.cases <- global.cases  %>% #use country (row 1) as column and variable names
+  row_to_names(row_number(1))
+global.cases <- sapply(global.cases, as.numeric) #convert data frame from string to numeric
+anyNA(global.cases) #FALSE
+cases.ts <- ts(global.cases[,c("Australia","China","Thailand", "US", "United Kingdom", "India")], 
+               start = c(2020,23),
+               frequency = 365)
+cases.ts <- diff(cases.ts, 1)
+global.cases <- as.data.frame(cases.ts)
+write.csv(global.cases, "C://Users/nkheth1/Desktop/Time Series and Forecasting/Final Project/globalcases.csv",
+          row.names = FALSE)
+
+
+#confirmed deaths data cleaning
+global.deaths <- global.deaths[,-c(1,3,4)]
+global.deaths <- global.deaths %>% 
+  group_by(Country.Region) %>% 
+  summarise_all(sum)
+global.deaths.m <- as.matrix(global.deaths)
+global.deaths.m.t <- t(global.deaths.m)
+global.deaths=as.data.frame(global.deaths.m.t)
+global.deaths <- global.deaths  %>%
+  row_to_names(row_number(1))
+global.deaths <- sapply(global.deaths, as.numeric)
+anyNA(global.deaths) #FALSE
+deaths.ts <- ts(global.deaths[,c("Australia","China","Thailand", "US", "United Kingdom", "India")], 
+                start = c(2020,23), 
+                frequency = 365)
+deaths.ts <- diff(deaths.ts, 1)
+global.deaths <- as.data.frame(deaths.ts)
+write.csv(global.deaths, "C://Users/nkheth1/Desktop/Time Series and Forecasting/Final Project/globaldeaths.csv",
+          row.names = FALSE)
+
+#confirmed recovered data cleaning
+global.recovered <- global.recovered[,-c(1,3,4)]
+global.recovered <- global.recovered %>% 
+  group_by(Country.Region) %>% 
+  summarise_all(sum)
+global.recovered.m <- as.matrix(global.recovered)
+global.recovered.m.t <- t(global.recovered.m)
+global.recovered <- as.data.frame(global.recovered.m.t)
+global.recovered <- global.recovered  %>%
+  row_to_names(row_number(1))
+global.recovered <- sapply(global.recovered, as.numeric)
+anyNA(global.recovered) #FALSE
+recovered.ts <- ts(global.recovered[,c("Australia","China","Thailand", "US", "United Kingdom", "India")], 
+                   start = c(2020,23), 
+                   frequency = 365)
+recovered.ts <- diff(recovered.ts, 1)
+global.recovered <- as.data.frame(recovered.ts)
+write.csv(global.recovered, "C://Users/nkheth1/Desktop/Time Series and Forecasting/Final Project/globalrecovered.csv",
+           row.names = FALSE)
+```
+While cleaning, saw that daily covid cases worldwide is formatted differently than a dataframe that can be converted to ts object. we could still convert it but we will have to switch up the format.has dates as a singular collumn not a collumn for each date as the others do. also some na's in the dataframes. we will need to reformate many of dataframes as they come as 
+```{r, echo = FALSE}
+###Time Series Elements and Partitioning
+
+autoplot(cases.ts)
+ggAcf(global.cases[,"Australia"], lag.max = 60) #trend
+ggAcf(global.cases[,"China"], lag.max = 60) #trend
+ggAcf(global.cases[,"Thailand"], lag.max = 60) #trend
+ggAcf(global.cases[,"US"], lag.max = 60) #trend
+ggAcf(global.cases[,"United Kingdom"], lag.max = 60) #trend
+ggAcf(global.cases[,"India"], lag.max = 60) #trend
+
+autoplot(deaths.ts)
+ggAcf(global.deaths[,"Australia"], lag.max = 60) #trend
+ggAcf(global.deaths[,"China"], lag.max = 60) #trend
+ggAcf(global.deaths[,"Thailand"], lag.max = 60) #trend
+ggAcf(global.deaths[,"US"], lag.max = 60) #trend, seems to have seasonality frequency 7 
+ggAcf(global.deaths[,"United Kingdom"], lag.max = 60) #trend, also seem to have seasonality frequency 7
+ggAcf(global.deaths[,"India"], lag.max = 60) #trend
+
+autoplot(recovered.ts)
+ggAcf(global.recovered[,"Australia"], lag.max = 60) #trend
+ggAcf(global.recovered[,"China"], lag.max = 60) #trend
+ggAcf(global.recovered[,"Thailand"], lag.max = 60) #trend
+ggAcf(global.recovered[,"US"], lag.max = 60) #unreliable data
+ggAcf(global.recovered[,"United Kingdom"], lag.max = 60) #trend
+ggAcf(global.recovered[,"India"], lag.max = 60) #trend
+
+cases.test <- tail(cases.ts, max(nrow(cases.ts)*0.2, 30))
+cases.train <- head(cases.ts, nrow(cases.ts) - nrow(cases.test))
+
+deaths.test <- tail(deaths.ts, max(nrow(cases.ts)*0.2, 30))
+deaths.train <- head(deaths.ts, nrow(deaths.ts) - nrow(cases.test))
+
+recovered.test <- tail(recovered.ts, max(nrow(recovered.ts)*0.2, 30))
+recovered.train <- head(recovered.ts, nrow(recovered.ts) - nrow(recovered.test))
+```
+
+
+```{r, echo = FALSE}
+### Model Building and Evaluation for Confirmed Cases
+
+##Australia
+cases.drift1 <- rwf(cases.train[,"Australia"], nrow(cases.test), drift = TRUE)
+checkresiduals(cases.drift1) #not adequate
+accuracy(cases.drift1, cases.test[,"Australia"])[2,] #RMSE = 11.825, MAPE = 74.03
+
+cases.ses1 <- ses(cases.train[,"Australia"], nrow(cases.test))
+checkresiduals(cases.ses1) #not adequate
+accuracy(cases.ses1, cases.test[,"Australia"])[2,] #RMSE=10.892, MAPE = 63.101
+
+cases.holt1 <- holt(cases.train[,"Australia"], nrow(cases.test))
+checkresiduals(cases.holt1) #not adequate
+accuracy(cases.holt1, cases.test[,"Australia"])[2,] #RMSE = 52.426, MAPE = 505.355
+
+cases.arima1 <- auto.arima(cases.train[,"Australia"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+cases.arima1 #(p,d,q) == (1,1,3) AIC = 4076.03
+checkresiduals(cases.arima1) #not adequate
+cases.pred1 <- forecast(cases.arima1, nrow(cases.test))
+accuracy(cases.pred1, cases.test[,"Australia"])[2,] #RMSE = 10.462, MAPE = 59.365
+
+cases.arima1.1 <- auto.arima(cases.train[,"Australia"], seasonal = FALSE)
+cases.arima1.1 #(p,d,q) == (1,1,3) AIC = 4076.03 (extremely high)
+checkresiduals(cases.arima1.1) #not adequate
+cases.pred1.1 <- forecast(cases.arima1.1, nrow(cases.test))
+accuracy(cases.pred1.1, cases.test[,"Australia"])[2,] #RMSE = 10.462, MAPE = 59.365
+
+##China
+cases.drift2 <- rwf(cases.train[,"China"], nrow(cases.test), drift = TRUE)
+checkresiduals(cases.drift2) #not adequate
+accuracy(cases.drift2, cases.test[,"China"])[2,] #RMSE = 14.412, MAPE = 46.748
+
+cases.ses2 <- ses(cases.train[,"China"], nrow(cases.test))
+checkresiduals(cases.ses2) #not adequate
+accuracy(cases.ses2, cases.test[,"China"])[2,] #RMSE= 9.94, MAPE = 36.582
+
+cases.holt2 <- holt(cases.train[,"China"], nrow(cases.test))
+checkresiduals(cases.holt2) #not adequate
+accuracy(cases.holt2, cases.test[,"China"])[2,] #RMSE = 95.072, MAPE = 471.443
+
+cases.arima2 <- auto.arima(cases.train[,"China"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+cases.arima2 #(p,d,q) == (0,1,2) AIC = 6357.25
+checkresiduals(cases.arima2) #not adequate
+cases.pred2 <- forecast(cases.arima2, nrow(cases.test))
+accuracy(cases.pred2, cases.test[,"China"])[2,] #RMSE = 10.173, MAPE = 43.823
+
+cases.arima2.1 <- auto.arima(cases.train[,"China"], seasonal = FALSE)
+cases.arima2.1 #(p,d,q) == (2,1,1) AIC = 4076.03 (extremely high)
+checkresiduals(cases.arima2.1) #not adequate
+cases.pred2.1 <- forecast(cases.arima2.1, nrow(cases.test))
+accuracy(cases.pred2.1, cases.test[,"China"])[2,] #RMSE = 9.936, MAPE = 37.203
+
+##Thailand
+cases.drift3 <- rwf(cases.train[,"Thailand"], nrow(cases.test), drift = TRUE)
+checkresiduals(cases.drift3) #not adequate
+accuracy(cases.drift3, cases.test[,"Thailand"])[2,] #RMSE = 1898.542, MAPE = Infinite
+
+cases.ses3 <- ses(cases.train[,"Thailand"], nrow(cases.test))
+checkresiduals(cases.ses3) #not adequate
+accuracy(cases.ses3, cases.test[,"Thailand"])[2,] #RMSE= 1919.253, MAPE = Infinite
+
+cases.holt3 <- holt(cases.train[,"Thailand"], nrow(cases.test))
+checkresiduals(cases.holt3) #not adequate
+accuracy(cases.holt3, cases.test[,"Thailand"])[2,] #RMSE = 1891.844, MAPE = Infinite
+
+cases.arima3 <- auto.arima(cases.train[,"Thailand"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+cases.arima3 #(p,d,q) == (2,1,3) AIC = 4883.82
+checkresiduals(cases.arima3) #not adequate
+cases.pred3 <- forecast(cases.arima3, nrow(cases.test))
+accuracy(cases.pred3, cases.test[,"Thailand"])[2,] #RMSE = 1843.526, MAPE = Infinite
+
+#Rough search returns the same model as exhaustive search
+cases.arima3.1 <- auto.arima(cases.train[,"Thailand"], seasonal = FALSE)
+cases.arima3.1 #(p,d,q) == (2,1,3) AIC = 4883.32 (extremely high)
+checkresiduals(cases.arima3.1) #not adequate
+cases.pred3.1 <- forecast(cases.arima3.1, nrow(cases.test))
+accuracy(cases.pred3.1, cases.test[,"Thailand"])[2,] #RMSE = 1843.526, MAPE = Infinite
+
+##US
+cases.drift4 <- rwf(cases.train[,"US"], nrow(cases.test), drift = TRUE)
+checkresiduals(cases.drift4) #not adequate, does not eliminate trend from the data
+accuracy(cases.drift4, cases.test[,"US"])[2,] #RMSE = 4.3x10^4, MAPE = 1.08x10^2
+
+cases.ses4 <- ses(cases.train[,"US"], nrow(cases.test))
+checkresiduals(cases.ses4) #not adequate, seasonality in the residuals
+accuracy(cases.ses4, cases.test[,"US"])[2,] #RMSE= 2.75x10^4, MAPE = 68.8
+
+cases.holt4 <- holt(cases.train[,"US"], nrow(cases.test))
+checkresiduals(cases.holt4) #not adequate, seems to have some seasonality in residuals
+accuracy(cases.holt4, cases.test[,"US"])[2,] #RMSE = 1.546x10^5, MAPE = 3.57x10^2
+
+cases.arima4 <- auto.arima(cases.train[,"US"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+cases.arima4 #(p,d,q) == (3,1,2) AIC = 8700.13
+checkresiduals(cases.arima4) #not adequate
+cases.pred4 <- forecast(cases.arima4, nrow(cases.test))
+accuracy(cases.pred4, cases.test[,"US"])[2,] #RMSE = 3.18x10^4, MAPE = 78.41
+
+cases.arima4.1 <- auto.arima(cases.train[,"US"], seasonal = FALSE)
+cases.arima4.1 #(p,d,q) == (0,1,1) AIC = 8756.75
+checkresiduals(cases.arima4.1) #not adequate
+cases.pred4.1 <- forecast(cases.arima4.1, nrow(cases.test))
+accuracy(cases.pred4.1, cases.test[,"US"])[2,] #RMSE = 2.753x10^4, MAPE = 68.81
+
+##United Kingdom
+cases.drift5 <- rwf(cases.train[,"United Kingdom"], nrow(cases.test), drift = TRUE)
+checkresiduals(cases.drift5) #not adequate, does not eliminate trend from the data
+accuracy(cases.drift5, cases.test[,"United Kingdom"])[2,] #RMSE = 1.022x10^4, MAPE = 3.415x10^2
+
+cases.ses5 <- ses(cases.train[,"United Kingdom"], nrow(cases.test))
+checkresiduals(cases.ses5) #not adequate, seasonality in the residuals
+accuracy(cases.ses5, cases.test[,"United Kingdom"])[2,] #RMSE= 8.536x10^3, MAPE = 2.836x10^2
+
+cases.holt5 <- holt(cases.train[,"United Kingdom"], nrow(cases.test))
+checkresiduals(cases.holt5) #not adequate, seems to have some seasonality in residuals
+accuracy(cases.holt5, cases.test[,"United Kingdom"])[2,] #RMSE = 8.589x10^3, MAPE = 2.855x10^2
+
+cases.arima5 <- auto.arima(cases.train[,"United Kingdom"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+cases.arima5 #(p,d,q) == (3,1,2) AIC = 7252.98
+checkresiduals(cases.arima5) #not adequate
+cases.pred5 <- forecast(cases.arima5, nrow(cases.test))
+accuracy(cases.pred5, cases.test[,"United Kingdom"])[2,] #RMSE = 8.305x10^3, MAPE = 2.76x10^2
+
+cases.arima5.1 <- auto.arima(cases.train[,"United Kingdom"], seasonal = FALSE)
+cases.arima5.1 #(p,d,q) == (0,1,1) AIC = 7289.06
+checkresiduals(cases.arima5.1) #not adequate
+cases.pred5.1 <- forecast(cases.arima5.1, nrow(cases.test))
+accuracy(cases.pred5.1, cases.test[,"United Kingdom"])[2,] #RMSE = 8.536x10^3, MAPE = 2.836x10^2
+
+##India
+cases.drift6 <- rwf(cases.train[,"India"], nrow(cases.test), drift = TRUE)
+checkresiduals(cases.drift6) #not adequate, seems to have seasonality in the data
+accuracy(cases.drift6, cases.test[,"India"])[2,] #RMSE = 2.072x10^5, MAPE = 71.08
+
+cases.ses6 <- ses(cases.train[,"India"], nrow(cases.test))
+checkresiduals(cases.ses6) #not adequate, seasonality in the residuals
+accuracy(cases.ses6, cases.test[,"India"])[2,] #RMSE= 2.097x10^5, MAPE = 73.933
+
+cases.holt6 <- holt(cases.train[,"India"], nrow(cases.test))
+checkresiduals(cases.holt6) #not adequate, seems to have some seasonality in residuals
+accuracy(cases.holt6, cases.test[,"India"])[2,] #RMSE = 2.023X10^5, MAPE = 6.886
+
+cases.arima6 <- auto.arima(cases.train[,"India"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+cases.arima6 #(p,d,q) == (2,1,3) AIC = 7665.03
+checkresiduals(cases.arima6) #not adequate, seasonality in the residuals
+cases.pred6 <- forecast(cases.arima6, nrow(cases.test))
+accuracy(cases.pred6, cases.test[,"India"])[2,] #RMSE = 2.076x10^5, MAPE = 71.73
+
+#Rough search returns same model as exhaustive search 
+
+cases.arima6.1 <- auto.arima(cases.train[,"India"], seasonal = FALSE)
+cases.arima6.1 #(p,d,q) == (2,1,3) AIC = 7665/03
+checkresiduals(cases.arima6.1) #not adequate
+cases.pred6.1 <- forecast(cases.arima6.1, nrow(cases.test))
+accuracy(cases.pred6.1, cases.test[,"India"])[2,] #RMSE = 2.076x10^5, MAPE = 71.73
+```
+
+
+```{r, echo = FALSE}
+### Model Building and Evaluation for Deaths
+
+##Australia
+deaths.drift1 <- rwf(deaths.train[,"Australia"], nrow(deaths.test), drift = TRUE)
+checkresiduals(deaths.drift1) #not adequate
+accuracy(deaths.drift1, deaths.test[,"Australia"])[2,] #RMSE = 0.101, MAPE = 100.00
+
+deaths.ses1 <- ses(deaths.train[,"Australia"], nrow(deaths.test))
+checkresiduals(deaths.ses1) #not adequate
+accuracy(deaths.ses1, deaths.test[,"Australia"])[2,] #RMSE= 0.101, MAPE = Infinite
+
+deaths.holt1 <- holt(deaths.train[,"Australia"], nrow(deaths.test))
+checkresiduals(deaths.holt1) #not adequate
+accuracy(deaths.holt1, deaths.test[,"Australia"])[2,] #RMSE = 0.10, MAPE = Infinite
+
+deaths.arima1 <- auto.arima(deaths.train[,"Australia"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+deaths.arima1 #(p,d,q) == (0,1,5) AIC = 2059.79
+checkresiduals(deaths.arima1) #not adequate
+deaths.pred1 <- forecast(deaths.arima1, nrow(deaths.test))
+accuracy(deaths.pred1, deaths.test[,"Australia"])[2,] #RMSE = 0.101, MAPE = Infinite
+
+#Rough search returns the same model as exhaustive search
+deaths.arima1.1 <- auto.arima(deaths.train[,"Australia"], seasonal = FALSE)
+deaths.arima1.1 #(p,d,q) == (3,1,2) AIC = 2076.63 (extremely high)
+checkresiduals(deaths.arima1.1) #not adequate
+deaths.pred1.1 <- forecast(deaths.arima1.1, nrow(deaths.test))
+accuracy(deaths.pred1.1, deaths.test[,"Australia"])[2,] #RMSE = 0.101, MAPE = Infinite 
+autoplot(deaths.ts[,"Australia"])
+
+##China
+autoplot(deaths.ts[,"China"])
+deaths.drift2 <- rwf(deaths.train[,"China"], nrow(deaths.test), drift = TRUE)
+checkresiduals(deaths.drift2) #not adequate
+accuracy(deaths.drift2, deaths.test[,"China"])[2,] #RMSE = 0.441, MAPE = Infinite
+
+deaths.ses2 <- ses(deaths.train[,"China"], nrow(deaths.test))
+checkresiduals(deaths.ses2) #not adequate
+accuracy(deaths.ses2, deaths.test[,"China"])[2,] #RMSE= 0.932, MAPE = Infinite
+
+deaths.holt2 <- holt(deaths.train[,"China"], nrow(deaths.test))
+checkresiduals(deaths.holt2) #not adequate
+accuracy(deaths.holt2, deaths.test[,"China"])[2,] #RMSE = 3.303, MAPE = Infinite
+
+deaths.arima2 <- auto.arima(deaths.train[,"China"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+deaths.arima2 #(p,d,q) == (0,1,1) AIC = 4446.8
+checkresiduals(deaths.arima2) #not adequate
+deaths.pred2 <- forecast(deaths.arima2, nrow(deaths.test))
+accuracy(deaths.pred2, deaths.test[,"China"])[2,] #RMSE = 0.39, MAPE = Infinite
+
+#Rough search returns the same model as exhaustive search
+deaths.arima2.1 <- auto.arima(deaths.train[,"China"], seasonal = FALSE)
+deaths.arima2.1 #(p,d,q) == (1,1,2) AIC = 4449.21
+checkresiduals(deaths.arima2.1) #not adequate
+deaths.pred2.1 <- forecast(deaths.arima2.1, nrow(deaths.test))
+accuracy(deaths.pred2.1, deaths.test[,"China"])[2,] #RMSE = 0.912, MAPE = Infinite
+
+##Thailand
+autoplot(deaths.ts[,"Thailand"])
+deaths.drift3 <- rwf(deaths.train[,"Thailand"], nrow(deaths.test), drift = TRUE)
+checkresiduals(deaths.drift3) #not adequate
+accuracy(deaths.drift3, deaths.test[,"Thailand"])[2,] #RMSE = 15.574, MAPE = 100
+
+deaths.ses3 <- ses(deaths.train[,"Thailand"], nrow(deaths.test))
+checkresiduals(deaths.ses3) #not adequate
+accuracy(deaths.ses3, deaths.test[,"Thailand"])[2,] #RMSE= 15.361, MAPE = Infinite
+
+deaths.holt3 <- holt(deaths.train[,"Thailand"], nrow(deaths.test))
+checkresiduals(deaths.holt3) #not adequate
+accuracy(deaths.holt3, deaths.test[,"Thailand"])[2,] #RMSE = 15.313, MAPE = Infinite
+
+deaths.arima3 <- auto.arima(deaths.train[,"Thailand"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+deaths.arima3 #(p,d,q) == (2,1,1) AIC = 497.44
+checkresiduals(deaths.arima3) #not adequate
+deaths.pred3 <- forecast(deaths.arima3, nrow(deaths.test))
+accuracy(deaths.pred3, deaths.test[,"Thailand"])[2,] #RMSE = 15.362, MAPE = Infinite
+
+#Rough search returns the same model as exhaustive search
+deaths.arima3.1 <- auto.arima(deaths.train[,"Thailand"], seasonal = FALSE)
+deaths.arima3.1 #(p,d,q) == (2,1,1) AIC = 497.44
+checkresiduals(deaths.arima3.1) #not adequate
+deaths.pred3.1 <- forecast(deaths.arima3.1, nrow(deaths.test))
+accuracy(deaths.pred3.1, deaths.test[,"Thailand"])[2,] #RMSE = 15.362, MAPE = Infinite
+
+##US
+deaths.drift4 <- rwf(deaths.train[,"US"], nrow(deaths.test), drift = TRUE)
+checkresiduals(deaths.drift4) #not adequate, there is some seasonality in the residuals
+accuracy(deaths.drift4, deaths.test[,"US"])[2,] #RMSE = 2.116x10^3, MAPE = 3.276x10^2
+
+deaths.ses4 <- ses(deaths.train[,"US"], nrow(deaths.test))
+checkresiduals(deaths.ses4) #not adequate, there is some seasonality in the residuals
+accuracy(deaths.ses4, deaths.test[,"US"])[2,] #RMSE= 1.754x10^3, MAPE = 2.714x10^2
+
+deaths.holt4 <- holt(deaths.train[,"US"], nrow(deaths.test))
+checkresiduals(deaths.holt4) #not adequate, still some seasonality left 
+accuracy(deaths.holt4, deaths.test[,"US"])[2,] #RMSE = 1.761x10^3, MAPE = 2.726x10^2
+
+deaths.arima4 <- auto.arima(deaths.train[,"US"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+deaths.arima4 #(p,d,q) == (5,1,0) AIC = 5605.79
+checkresiduals(deaths.arima4) #not adequate
+deaths.pred4 <- forecast(deaths.arima4, nrow(deaths.test))
+accuracy(deaths.pred4, deaths.test[,"US"])[2,] #RMSE = 1.144x10^3, MAPE = 1.79x10^2
+
+#Rough search returns the same model as exhaustive search
+deaths.arima4.1 <- auto.arima(deaths.train[,"US"], seasonal = FALSE)
+deaths.arima4.1 #(p,d,q) == (3,1,2) AIC = 5664.33
+checkresiduals(deaths.arima4.1) #not adequate
+deaths.pred4.1 <- forecast(deaths.arima4.1, nrow(deaths.test))
+accuracy(deaths.pred4.1, deaths.test[,"US"])[2,] #RMSE = 1.032x10^3, MAPE = 1.616x10^2
+
+##Unite Kingdom
+deaths.drift5 <- rwf(deaths.train[,"United Kingdom"], nrow(deaths.test), drift = TRUE)
+checkresiduals(deaths.drift5) #not adequate, there is some seasonality in the residuals
+accuracy(deaths.drift5, deaths.test[,"United Kingdom"])[2,] #RMSE = 5.41x10^2, MAPE = 4.655x10^3
+
+deaths.ses5 <- ses(deaths.train[,"United Kingdom"], nrow(deaths.test))
+checkresiduals(deaths.ses5) #not adequate, there is some seasonality in the residuals
+accuracy(deaths.ses5, deaths.test[,"United Kingdom"])[2,] #RMSE= 4.974x10^2, MAPE = 4.134x10^3
+
+deaths.holt5 <- holt(deaths.train[,"United Kingdom"], nrow(deaths.test))
+checkresiduals(deaths.holt5) #not adequate, still some seasonality left 
+accuracy(deaths.holt5, deaths.test[,"United Kingdom"])[2,] #RMSE = 1.689x10^2, MAPE = 1.402x10^3
+
+deaths.arima5 <- auto.arima(deaths.train[,"United Kingdom"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+deaths.arima5 #(p,d,q) == (5,1,0) AIC = 4944.39
+checkresiduals(deaths.arima5) #not adequate
+deaths.pred5 <- forecast(deaths.arima5, nrow(deaths.test))
+accuracy(deaths.pred5, deaths.test[,"United Kingdom"])[2,] #RMSE = 4.532x10^2, MAPE = 3.803x10^3
+
+#Rough search returns the same model as exhaustive search
+deaths.arima5.1 <- auto.arima(deaths.train[,"United Kingdom"], seasonal = FALSE)
+deaths.arima5.1 #(p,d,q) == (1,1,5) AIC = 5003.89
+checkresiduals(deaths.arima5.1) #not adequate
+deaths.pred5.1 <- forecast(deaths.arima5.1, nrow(deaths.test))
+accuracy(deaths.pred5.1, deaths.test[,"United Kingdom"])[2,] #RMSE = 4.215x10^2, MAPE = 3.548x10^3
+
+##India
+deaths.drift6 <- rwf(deaths.train[,"India"], nrow(deaths.test), drift = TRUE)
+checkresiduals(deaths.drift6) #not adequate
+accuracy(deaths.drift6, deaths.test[,"India"])[2,] #RMSE = 2.303x10^3, MAPE = 67.7
+
+deaths.ses6 <- ses(deaths.train[,"India"], nrow(deaths.test))
+checkresiduals(deaths.ses6) #not adequate
+accuracy(deaths.ses6, deaths.test[,"India"])[2,] #RMSE= 2.32x10^3, MAPE = 69.573
+
+deaths.holt6 <- holt(deaths.train[,"India"], nrow(deaths.test))
+checkresiduals(deaths.holt6) #not adequate 
+accuracy(deaths.holt6, deaths.test[,"India"])[2,] #RMSE = 2.452x10^3, MAPE = 87.9
+
+deaths.arima6 <- auto.arima(deaths.train[,"India"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+deaths.arima6 #(p,d,q) == (1,1,3) AIC = 4830.06
+checkresiduals(deaths.arima6) #not adequate
+deaths.pred6 <- forecast(deaths.arima6, nrow(deaths.test))
+accuracy(deaths.pred6, deaths.test[,"India"])[2,] #RMSE = 2.321x10^3, MAPE = 70.153
+
+#Rough search returns the same model as exhaustive search
+deaths.arima6.1 <- auto.arima(deaths.train[,"India"], seasonal = FALSE)
+deaths.arima6.1 #(p,d,q) == (1,1,3) AIC = 5664.33
+checkresiduals(deaths.arima6.1) #not adequate
+deaths.pred6.1 <- forecast(deaths.arima6.1, nrow(deaths.test))
+accuracy(deaths.pred6.1, deaths.test[,"India"])[2,] #RMSE = 2.321x10^3, MAPE = 70.153
+
+```
+
+
+```{r, echo = FALSE}
+### Model Building and Evaluation for Recovered
+
+##Australia
+recovered.drift1 <- rwf(recovered.train[,"Australia"], nrow(recovered.test), drift = TRUE)
+checkresiduals(recovered.drift1) #not adequate
+accuracy(recovered.drift1, recovered.test[,"Australia"])[2,] #RMSE = 7.175, MAPE = Infinite
+
+recovered.ses1 <- ses(recovered.train[,"Australia"], nrow(recovered.test))
+checkresiduals(recovered.ses1) #not adequate
+accuracy(recovered.ses1, recovered.test[,"Australia"])[2,] #RMSE= 7.767, MAPE = Infinite
+
+recovered.holt1 <- holt(recovered.train[,"Australia"], nrow(recovered.test))
+checkresiduals(recovered.holt1) #not adequate
+accuracy(recovered.holt1, recovered.test[,"Australia"])[2,] #RMSE = 6.945, MAPE = Infinite
+
+###best MAPE
+recovered.arima1 <- auto.arima(recovered.train[,"Australia"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+recovered.arima1 #(p,d,q) == (1,0,2) AIC = 5364.41
+checkresiduals(recovered.arima1) #not adequate
+recovered.pred1 <- forecast(recovered.arima1, nrow(recovered.test))
+accuracy(recovered.pred1, recovered.test[,"Australia"])[2,] #RMSE = 44.965, MAPE = Infinite
+
+#Rough search returns the same model as exhaustive search
+recovered.arima1.1 <- auto.arima(recovered.train[,"Australia"], seasonal = FALSE)
+recovered.arima1.1 #(p,d,q) == (1,0,2) AIC = 5364.41 (extremely high)
+checkresiduals(recovered.arima1.1) #not adequate
+recovered.pred1.1 <- forecast(recovered.arima1.1, nrow(recovered.test))
+accuracy(recovered.pred1.1, recovered.test[,"Australia"])[2,] #RMSE = 44.965, MAPE = Infinite 
+
+##China
+autoplot(recovered.ts[,"China"])
+recovered.drift2 <- rwf(recovered.train[,"China"], nrow(recovered.test), drift = TRUE)
+checkresiduals(recovered.drift2) #not adequate
+accuracy(recovered.drift2, recovered.test[,"China"])[2,] #RMSE = 61.791, MAPE = 307.04
+
+recovered.ses2 <- ses(recovered.train[,"China"], nrow(recovered.test))
+checkresiduals(recovered.ses2) #not adequate
+accuracy(recovered.ses2, recovered.test[,"China"])[2,] #RMSE= 54.61, MAPE = 270.254
+
+recovered.holt2 <- holt(recovered.train[,"China"], nrow(recovered.test))
+checkresiduals(recovered.holt2) #not adequate
+accuracy(recovered.holt2, recovered.test[,"China"])[2,] #RMSE = 351.246, MAPE = 1.61x10^3
+
+recovered.arima2 <- auto.arima(recovered.train[,"China"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+recovered.arima2 #(p,d,q) == (0,1,2) AIC = 5296.13
+checkresiduals(recovered.arima2) #not adequate
+recovered.pred2 <- forecast(recovered.arima2, nrow(recovered.test))
+accuracy(recovered.pred2, recovered.test[,"China"])[2,] #RMSE = 55.401, MAPE = 274.091
+
+#Rough search returns the same model as exhaustive search
+recovered.arima2.1 <- auto.arima(recovered.train[,"China"], seasonal = FALSE)
+recovered.arima2.1 #(p,d,q) == (0,1,2) AIC = 5296.13
+checkresiduals(recovered.arima2.1) #not adequate
+recovered.pred2.1 <- forecast(recovered.arima2.1, nrow(recovered.test))
+accuracy(recovered.pred2.1, recovered.test[,"China"])[2,] #RMSE = 55.401, MAPE = 274.091
+
+##Thailand
+recovered.drift3 <- rwf(recovered.train[,"Thailand"], nrow(recovered.test), drift = TRUE)
+checkresiduals(recovered.drift3) #not adequate
+accuracy(recovered.drift3, recovered.test[,"Thailand"])[2,] #RMSE = 70.669, MAPE = Infinite
+
+recovered.ses3 <- ses(recovered.train[,"Thailand"], nrow(recovered.test))
+checkresiduals(recovered.ses3) #not adequate
+accuracy(recovered.ses3, recovered.test[,"Thailand"])[2,] #RMSE= 435.89, MAPE = Infinite
+
+recovered.holt3 <- holt(recovered.train[,"Thailand"], nrow(recovered.test))
+checkresiduals(recovered.holt3) #not adequate
+accuracy(recovered.holt3, recovered.test[,"Thailand"])[2,] #RMSE = 511.855, MAPE = Infinite
+
+recovered.arima3 <- auto.arima(recovered.train[,"Thailand"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+recovered.arima3 #(p,d,q) == (0,1,5) AIC = 4956.9
+checkresiduals(recovered.arima3) #not adequate
+recovered.pred3 <- forecast(recovered.arima3, nrow(recovered.test))
+accuracy(recovered.pred3, recovered.test[,"Thailand"])[2,] #RMSE = 312.458, MAPE = Infinite
+
+#Rough search returns the same model as exhaustive search
+recovered.arima3.1 <- auto.arima(recovered.train[,"Thailand"], seasonal = FALSE)
+recovered.arima3.1 #(p,d,q) == (2,1,2) AIC = 4966.08
+checkresiduals(recovered.arima3.1) #not adequate
+recovered.pred3.1 <- forecast(recovered.arima3.1, nrow(recovered.test))
+accuracy(recovered.pred3.1, recovered.test[,"Thailand"])[2,] #RMSE = 303.01, MAPE = Infinite
+
+##US
+#recovered.drift4 <- rwf(recovered.train[,"US"], nrow(recovered.test), drift = TRUE)
+#checkresiduals(recovered.drift4) #not adequate, there is some seasonality in the residuals
+#accuracy(recovered.drift4, recovered.test[,"US"])[2,] #RMSE = 2.116x10^3, MAPE = 3.276x10^2
+
+#recovered.ses4 <- ses(recovered.train[,"US"], nrow(recovered.test))
+#checkresiduals(recovered.ses4) #not adequate, there is some seasonality in the residuals
+#accuracy(recovered.ses4, recovered.test[,"US"])[2,] #RMSE= 1.754x10^3, MAPE = 2.714x10^2
+
+#recovered.holt4 <- holt(recovered.train[,"US"], nrow(recovered.test))
+#checkresiduals(recovered.holt4) #not adequate, still some seasonality left 
+#accuracy(recovered.holt4, recovered.test[,"US"])[2,] #RMSE = 1.761x10^3, MAPE = 2.726x10^2
+
+#recovered.arima4 <- auto.arima(recovered.train[,"US"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+#recovered.arima4 #(p,d,q) == (5,1,0) AIC = 5605.79
+#checkresiduals(recovered.arima4) #not adequate
+#recovered.pred4 <- forecast(recovered.arima4, nrow(recovered.test))
+#accuracy(recovered.pred4, recovered.test[,"US"])[2,] #RMSE = 1.144x10^3, MAPE = 1.79x10^2
+
+#Rough search returns the same model as exhaustive search
+#recovered.arima4.1 <- auto.arima(recovered.train[,"US"], seasonal = FALSE)
+#recovered.arima4.1 #(p,d,q) == (3,1,2) AIC = 5664.33
+#checkresiduals(recovered.arima4.1) #not adequate
+#recovered.pred4.1 <- forecast(recovered.arima4.1, nrow(recovered.test))
+#accuracy(recovered.pred4.1, recovered.test[,"US"])[2,] #RMSE = 1.032x10^3, MAPE = 1.616x10^2
+
+##Unite Kingdom
+recovered.drift5 <- rwf(recovered.train[,"United Kingdom"], nrow(recovered.test), drift = TRUE)
+checkresiduals(recovered.drift5) #not adequate, there is some seasonality in the residuals
+accuracy(recovered.drift5, recovered.test[,"United Kingdom"])[2,] #RMSE = 72.28, MAPE = Infinite
+
+recovered.ses5 <- ses(recovered.train[,"United Kingdom"], nrow(recovered.test))
+checkresiduals(recovered.ses5) #not adequate, there is some seasonality in the residuals
+accuracy(recovered.ses5, recovered.test[,"United Kingdom"])[2,] #RMSE= 58.287, MAPE = Infinite
+
+recovered.holt5 <- holt(recovered.train[,"United Kingdom"], nrow(recovered.test))
+checkresiduals(recovered.holt5) #not adequate, still some seasonality left 
+accuracy(recovered.holt5, recovered.test[,"United Kingdom"])[2,] #RMSE = 68.894, MAPE = Infinite
+
+recovered.arima5 <- auto.arima(recovered.train[,"United Kingdom"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+recovered.arima5 #(p,d,q) == (1,1,4) AIC = 4019.25
+checkresiduals(recovered.arima5) #not adequate
+recovered.pred5 <- forecast(recovered.arima5, nrow(recovered.test))
+accuracy(recovered.pred5, recovered.test[,"United Kingdom"])[2,] #RMSE = 57.819, MAPE = Infinite
+
+#Rough search returns the same model as exhaustive search
+recovered.arima5.1 <- auto.arima(recovered.train[,"United Kingdom"], seasonal = FALSE)
+recovered.arima5.1 #(p,d,q) == (1,1,4) AIC = 4019.03
+checkresiduals(recovered.arima5.1) #not adequate
+recovered.pred5.1 <- forecast(recovered.arima5.1, nrow(recovered.test))
+accuracy(recovered.pred5.1, recovered.test[,"United Kingdom"])[2,] #RMSE = 57.819, MAPE = Infinite
+
+##India
+recovered.drift6 <- rwf(recovered.train[,"India"], nrow(recovered.test), drift = TRUE)
+checkresiduals(recovered.drift6) #not adequate
+accuracy(recovered.drift6, recovered.test[,"India"])[2,] #RMSE = 1.956x10^5, MAPE = 70.242
+
+recovered.ses6 <- ses(recovered.train[,"India"], nrow(recovered.test))
+checkresiduals(recovered.ses6) #not adequate
+accuracy(recovered.ses6, recovered.test[,"India"])[2,] #RMSE= 1.965x10^5, MAPE = 70.237
+
+recovered.holt6 <- holt(recovered.train[,"India"], nrow(recovered.test))
+checkresiduals(recovered.holt6) #not adequate 
+accuracy(recovered.holt6, recovered.test[,"India"])[2,] #RMSE = 2.086x10^5, MAPE = 84.51
+
+recovered.arima6 <- auto.arima(recovered.train[,"India"], seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+recovered.arima6 #(p,d,q) == (2,2,3) AIC = 7632.19
+checkresiduals(recovered.arima6) #not adequate
+recovered.pred6 <- forecast(recovered.arima6, nrow(recovered.test))
+accuracy(recovered.pred6, recovered.test[,"India"])[2,] #RMSE = 2.082x10^5, MAPE = 83.82
+
+#Rough search returns the same model as exhaustive search
+recovered.arima6.1 <- auto.arima(recovered.train[,"India"], seasonal = FALSE)
+recovered.arima6.1 #(p,d,q) == (0,2,2) AIC = 7636.97
+checkresiduals(recovered.arima6.1) #not adequate
+recovered.pred6.1 <- forecast(recovered.arima6.1, nrow(recovered.test))
+accuracy(recovered.pred6.1, recovered.test[,"India"])[2,] #RMSE = 2.086x10^5, MAPE = 84.547
+```
+
+Forecasts for Confirmed Cases
+```{r, echo = FALSE}
+
+#Australia
+cases.arima1 <- Arima(cases.ts[,"Australia"], order = c(1,1,3))
+cases.pred1 <- forecast(cases.arima1, 30)
+autoplot(cases.pred1) + autolayer(fitted(cases.pred1), series = "Fitted")
+
+#China
+cases.arima2 <- Arima(cases.ts[,"China"], order = c(2,1,1))
+cases.pred2 <- forecast(cases.arima2, 30)
+autoplot(cases.pred2) + autolayer(fitted(cases.pred2), series = "Fitted")
+
+#Thailand
+cases.arima3 <- Arima(cases.ts[,"Thailand"], order = c(2,1,3))
+cases.pred3 <- forecast(cases.arima3, 30)
+autoplot(cases.pred3) + autolayer(fitted(cases.pred3), series = "Fitted")
+
+#US
+cases.arima4 <- Arima(cases.ts[,"US"], order = c(0,1,1))
+cases.pred4 <- forecast(cases.arima4, 30)
+autoplot(cases.pred4) + autolayer(fitted(cases.pred4), series = "Fitted")
+
+#United Kingdom
+cases.arima5 <- Arima(cases.ts[,"United Kingdom"], order = c(3,1,2))
+cases.pred5 <- forecast(cases.arima5, 30)
+autoplot(cases.pred5) + autolayer(fitted(cases.pred5), series = "Fitted")
+
+#India
+cases.arima6 <- Arima(cases.ts[,"India"], order = c(2,1,3))
+cases.pred6 <- forecast(cases.arima6, 30)
+autoplot(cases.pred6) + autolayer(fitted(cases.pred6), series = "Fitted")
+
+```
+
+
+```{r, echo = FALSE}
+#Australia
+deaths.arima1 <- Arima(deaths.ts[,"Australia"], order = c(0,1,5))
+deaths.pred1 <- forecast(deaths.arima1, 30)
+autoplot(deaths.pred1) + autolayer(fitted(deaths.pred1), series = "Fitted")
+
+#China
+deaths.arima2 <- Arima(deaths.ts[,"China"], order = c(0,1,1))
+deaths.pred2 <- forecast(deaths.arima2, 30)
+autoplot(deaths.pred2) + autolayer(fitted(deaths.pred2), series = "Fitted")
+
+#Thailand
+deaths.arima3 <- Arima(deaths.ts[,"Thailand"], order = c(2,1,1))
+deaths.pred3 <- forecast(deaths.arima3, 30)
+autoplot(deaths.pred3) + autolayer(fitted(deaths.pred3), series = "Fitted")
+
+#US
+deaths.arima4 <- Arima(deaths.ts[,"US"], order = c(3,1,2))
+deaths.pred4 <- forecast(deaths.arima4, 30)
+autoplot(deaths.pred4) + autolayer(fitted(deaths.pred4), series = "Fitted")
+
+#United Kingdom
+deaths.arima5 <- Arima(deaths.ts[,"United Kingdom"], order = c(1,1,5))
+deaths.pred5 <- forecast(deaths.arima5, 30)
+autoplot(deaths.pred5) + autolayer(fitted(deaths.pred5), series = "Fitted")
+
+#India
+deaths.arima6 <- Arima(deaths.ts[,"India"], order = c(1,1,3))
+deaths.pred6 <- forecast(deaths.arima6, 30)
+autoplot(deaths.pred6) + autolayer(fitted(deaths.pred6), series = "Fitted")
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

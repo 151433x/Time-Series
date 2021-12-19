@@ -1,0 +1,39 @@
+---
+title: "Homework 6 TS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#prework 
+library('fpp2') 
+rm(list=ls())  
+gc()  
+cat("\f")  
+#load the data
+longevity.df=read.csv('C:/Users/xtorres1/Desktop/R/Datasets/Time Series/homework data sets/Longevity.csv')
+bids.df=read.csv('c:/Users/xtorres1/Desktop/R/Datasets/Time Series/homework data sets/bids.csv')
+```
+
+
+```{r basic ETL processes }
+anyNA(longevity.df)
+ggAcf(longevity.df,24)
+longevity.ts=ts(longevity.df,start =c(1970,1))
+long.ts=ts(cbind(longevity.ts,t=seq(from=1,to=length(longevity.ts))))
+plot(long.ts[,'longevity.df'],long.ts[,'t'])
+```
+There is a definite trend in the data. no seasonal pattarns though.also only one variable for long so we will be using length instead of nrows for partitioning. converted to ts object.cbinded a t variable for a time stamp.scatterplot of long vs t.
+
+
+```{r partitioning}
+test=tail(long.ts,max(nrow(long.ts)*.2,3))
+train=head(long.ts,nrow(long.ts)-nrow(test))
+```
+
+```{r Modeling, echo=FALSE}
+linear=tslm(long.ts~t,train)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
